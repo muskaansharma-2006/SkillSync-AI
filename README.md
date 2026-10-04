@@ -63,3 +63,21 @@ SkillSync-AI/
 ├── config.js
 ├── render.yaml
 └── README.md
+
+
+### One thing I'd change for your GitHub specifically
+
+Since you're using this for **internships**, I'd also add a small **"What I Built / Learned"** section. It makes the repository look more like a real student project rather than just an AI-generated website:
+
+```markdown
+## 📚 What I Built & Learned
+
+Through this project, I worked on:
+
+- Designing a competency-based assessment workflow
+- Building responsive web interfaces
+- Connecting frontend components with backend services
+- Working with Supabase for data management
+- Integrating AI capabilities using the Gemini API
+- Implementing candidate and recruiter workflows
+- Deploying a web application using Render
