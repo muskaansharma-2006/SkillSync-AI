@@ -7,6 +7,8 @@
   <!-- Google Fonts & Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css">
+  <script src="config.js?v=20260920-1"></script>
+  <script src="route-guard.js?v=20260927-1"></script>
 </head>
 <body style="background: #070a12; min-height: 100vh; display: flex; flex-direction: column;">
   <div class="app-container" style="flex: 1; display: flex; flex-direction: column;">
@@ -101,25 +103,25 @@ print(type(x))</div>
             Select the Correct Answer:
           </h4>
           <div id="mcqOptionsContainer" style="display: flex; flex-direction: column; gap: 0.85rem;">
-            <div class="mcq-option-card" data-index="0" style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease;">
-              <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); color: var(--text-main); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; flex-shrink: 0;">A</div>
-              <div style="flex: 1; font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.15rem;">Raises a TypeError because x was declared as an integer.</div>
-              <div style="font-size: 1.1rem; color: var(--text-dim); flex-shrink: 0; margin-top: 0.15rem;"><i class="fa-regular fa-circle"></i></div>
+            <div class="mcq-option-card" data-index="0" onclick="window.selectMcqOption(0)" style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--radius-md); cursor: pointer; user-select: none; transition: all 0.2s ease;">
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); color: var(--text-main); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; flex-shrink: 0; pointer-events: none;">A</div>
+              <div style="flex: 1; font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.15rem; pointer-events: none;">Raises a TypeError because x was declared as an integer.</div>
+              <div style="font-size: 1.1rem; color: var(--text-dim); flex-shrink: 0; margin-top: 0.15rem; pointer-events: none;"><i class="fa-regular fa-circle"></i></div>
             </div>
-            <div class="mcq-option-card" data-index="1" style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease;">
-              <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); color: var(--text-main); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; flex-shrink: 0;">B</div>
-              <div style="flex: 1; font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.15rem;">Python dynamically rebinds x to the string object 'Hello', so type(x) returns &lt;class 'str'&gt;.</div>
-              <div style="font-size: 1.1rem; color: var(--text-dim); flex-shrink: 0; margin-top: 0.15rem;"><i class="fa-regular fa-circle"></i></div>
+            <div class="mcq-option-card" data-index="1" onclick="window.selectMcqOption(1)" style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--radius-md); cursor: pointer; user-select: none; transition: all 0.2s ease;">
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); color: var(--text-main); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; flex-shrink: 0; pointer-events: none;">B</div>
+              <div style="flex: 1; font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.15rem; pointer-events: none;">Python dynamically rebinds x to the string object 'Hello', so type(x) returns &lt;class 'str'&gt;.</div>
+              <div style="font-size: 1.1rem; color: var(--text-dim); flex-shrink: 0; margin-top: 0.15rem; pointer-events: none;"><i class="fa-regular fa-circle"></i></div>
             </div>
-            <div class="mcq-option-card" data-index="2" style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease;">
-              <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); color: var(--text-main); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; flex-shrink: 0;">C</div>
-              <div style="flex: 1; font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.15rem;">x becomes a tuple containing (10, 'Hello').</div>
-              <div style="font-size: 1.1rem; color: var(--text-dim); flex-shrink: 0; margin-top: 0.15rem;"><i class="fa-regular fa-circle"></i></div>
+            <div class="mcq-option-card" data-index="2" onclick="window.selectMcqOption(2)" style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--radius-md); cursor: pointer; user-select: none; transition: all 0.2s ease;">
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); color: var(--text-main); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; flex-shrink: 0; pointer-events: none;">C</div>
+              <div style="flex: 1; font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.15rem; pointer-events: none;">x becomes a tuple containing (10, 'Hello').</div>
+              <div style="font-size: 1.1rem; color: var(--text-dim); flex-shrink: 0; margin-top: 0.15rem; pointer-events: none;"><i class="fa-regular fa-circle"></i></div>
             </div>
-            <div class="mcq-option-card" data-index="3" style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease;">
-              <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); color: var(--text-main); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; flex-shrink: 0;">D</div>
-              <div style="flex: 1; font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.15rem;">Compilation fails due to missing static type annotations.</div>
-              <div style="font-size: 1.1rem; color: var(--text-dim); flex-shrink: 0; margin-top: 0.15rem;"><i class="fa-regular fa-circle"></i></div>
+            <div class="mcq-option-card" data-index="3" onclick="window.selectMcqOption(3)" style="display: flex; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: var(--radius-md); cursor: pointer; user-select: none; transition: all 0.2s ease;">
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); color: var(--text-main); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; flex-shrink: 0; pointer-events: none;">D</div>
+              <div style="flex: 1; font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin-top: 0.15rem; pointer-events: none;">Compilation fails due to missing static type annotations.</div>
+              <div style="font-size: 1.1rem; color: var(--text-dim); flex-shrink: 0; margin-top: 0.15rem; pointer-events: none;"><i class="fa-regular fa-circle"></i></div>
             </div>
           </div>
         </div>

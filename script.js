@@ -2,10 +2,20 @@
   SkillSync - Core Application Logic & Interactions
 */
 
-const getApiBaseUrl = () => (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : (window.API_BASE_URL || '')).replace(/\/$/, '');
+if (typeof window.getApiBaseUrl !== 'function') {
+  window.getApiBaseUrl = function() {
+    return (typeof window.API_BASE_URL !== 'undefined' ? window.API_BASE_URL : (window.location.origin || '')).replace(/\/$/, '');
+  };
+}
+
+function getSanitizedToken() {
+  const t = localStorage.getItem("skillsync_token");
+  if (!t || t === "null" || t === "undefined" || t.trim() === "") return null;
+  return t;
+}
 
 async function apiFetch(url, options = {}) {
-  const token = localStorage.getItem("skillsync_token");
+  const token = getSanitizedToken();
   const headers = options.headers ? { ...options.headers } : {};
   if (token && !headers["Authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -20,9 +30,9 @@ async function apiFetch(url, options = {}) {
 // Application State Store (Local Storage sync with fallback mock defaults)
 const CompetencyState = {
   candidate: {
-    name: "Muskaan",
-    fullName: "Muskaan Sharma",
-    avatar: "MS",
+    name: "Candidate",
+    fullName: "Candidate User",
+    avatar: "CU",
     overallScore: 84,
     level: "Intermediate",
     assessmentsCompleted: 6,
@@ -117,9 +127,49 @@ const PROTECTED_PAGES = new Set([
   "mentor.html", "career-recommendation.html", "recruiter.html", "candidate.html", "settings.html"
 ]);
 
+function updateUserProfileHeader(user) {
+  let currentUser = user || window.SkillSyncAuth;
+  if (!currentUser || !currentUser.id) {
+    try {
+      const stored = localStorage.getItem("skillsync_user");
+      if (stored) currentUser = JSON.parse(stored);
+    } catch (e) {}
+  }
+  currentUser = currentUser || {};
+
+  const rawName = currentUser.name || currentUser.full_name || (currentUser.email ? currentUser.email.split('@')[0] : '');
+  const displayName = rawName ? rawName.trim() : 'Candidate';
+  const firstName = displayName.split(' ')[0] || 'Candidate';
+  const initials = displayName.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'CA';
+
+  const level = currentUser.competency_level 
+    ? `${currentUser.competency_level} Level` 
+    : (currentUser.overall_competency !== undefined && currentUser.overall_competency !== null
+        ? (currentUser.overall_competency >= 85 ? "Advanced Level" : (currentUser.overall_competency >= 70 ? "Intermediate Level" : "Beginner Level")) 
+        : "Candidate");
+
+  const greetingEl = document.getElementById("dashGreeting");
+  if (greetingEl) {
+    greetingEl.textContent = `Welcome back, ${firstName} 👋`;
+  }
+  
+  document.querySelectorAll("#dashHeaderName, .user-profile .user-name").forEach(el => {
+    el.textContent = `${firstName} 👋`;
+  });
+
+  document.querySelectorAll("#dashAvatar, .user-profile .avatar").forEach(el => {
+    el.textContent = initials;
+  });
+
+  document.querySelectorAll("#dashHeaderRole, .user-profile .user-role").forEach(el => {
+    el.textContent = level;
+  });
+}
+
 // Initialize Application once the page markup is available
 async function initializeApplication() {
   if (!(await enforceAuthentication())) return;
+  updateUserProfileHeader(window.SkillSyncAuth);
   initNavigation();
   initRoleSwitcher();
   initMobileMenu();
@@ -157,15 +207,26 @@ async function initializeApplication() {
 async function enforceAuthentication() {
   const page = getPageName() || "index.html";
   if (!PROTECTED_PAGES.has(page)) return true;
-  try {
-    const token = localStorage.getItem("skillsync_token");
-    const headers = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const response = await fetch(`${getApiBaseUrl()}/api/auth/me`, { credentials: "include", headers });
+  if (window.SkillSyncAuth && window.SkillSyncAuth.id) {
+    return true;
+  }
+
+  try {
+    const token = getSanitizedToken();
+    if (!token) throw new Error("No token found");
+    const headers = { "Authorization": `Bearer ${token}` };
+
+    const fetchPromise = fetch(`${getApiBaseUrl()}/api/auth/me`, { credentials: "include", headers });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("NETWORK_TIMEOUT")), 4000)
+    );
+
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
     const result = await response.json();
     const user = result.data;
-    if (!response.ok || !user) throw new Error("Unauthenticated");
+    if (!response.ok || !user || !user.id) throw new Error("Unauthenticated");
+
     window.SkillSyncAuth = user;
     localStorage.setItem("skillsync_user", JSON.stringify(user));
 
@@ -179,6 +240,23 @@ async function enforceAuthentication() {
     }
     return true;
   } catch (error) {
+    if (error.message === "NETWORK_TIMEOUT") {
+      console.warn("[SkillSync Auth] Auth check timed out after 4 seconds.");
+      const stored = localStorage.getItem("skillsync_user");
+      if (stored) {
+        try {
+          window.SkillSyncAuth = JSON.parse(stored);
+          if (!document.querySelector(".network-warning-banner")) {
+            const banner = document.createElement("div");
+            banner.className = "network-warning-banner";
+            banner.style.cssText = "position: fixed; top: 0; left: 0; right: 0; z-index: 9999; background: #f59e0b; color: #000; text-align: center; padding: 0.5rem; font-weight: 600; font-size: 0.875rem;";
+            banner.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Connection is slow. Retrying session verification... <button onclick="location.reload()" style="margin-left:1rem; padding: 0.2rem 0.6rem; cursor:pointer;">Retry</button>';
+            document.body.prepend(banner);
+          }
+          return true;
+        } catch(e) {}
+      }
+    }
     localStorage.removeItem("skillsync_token");
     localStorage.removeItem("skillsync_user");
     window.location.href = "auth.html?returnTo=" + encodeURIComponent(page);
@@ -337,20 +415,7 @@ async function initCandidateDashboard() {
   }
   user = user || {};
   
-  const greetingEl = document.getElementById("dashGreeting");
-  if (greetingEl && user.name) {
-    const firstName = user.name.split(' ')[0];
-    greetingEl.textContent = `Good morning, ${firstName} 👋`;
-  }
-  const headerNameEl = document.getElementById("dashHeaderName");
-  if (headerNameEl && user.name) {
-    headerNameEl.textContent = user.name;
-  }
-  const avatarEl = document.getElementById("dashAvatar");
-  if (avatarEl && user.name) {
-    const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    avatarEl.textContent = initials;
-  }
+  updateUserProfileHeader(user);
 
   try {
     let compRes = { ok: false };
@@ -390,14 +455,21 @@ async function initCandidateDashboard() {
     const headerRoleEl = document.getElementById("dashHeaderRole");
     const quoteEl = document.getElementById("dashAiInsightQuote");
 
-    if (completedCount > 0 || (competencies && competencies.length > 0) || (overallScore !== null && overallScore > 0)) {
-      const finalScore = overallScore !== null && overallScore > 0 ? overallScore : (competencies.length > 0 ? Math.round(competencies.reduce((a,b)=>a+Number(b.score),0)/competencies.length) : 84);
-      const finalLevel = skillLevel !== "Not Assessed" ? skillLevel : (finalScore >= 85 ? "Advanced" : (finalScore >= 70 ? "Intermediate" : "Beginner"));
+    const hasAssessedData = completedCount > 0 || (competencies && competencies.length > 0) || (overallScore !== null && overallScore > 0);
+
+    if (hasAssessedData) {
+      const finalScore = (overallScore !== null && overallScore > 0) 
+        ? overallScore 
+        : Math.round(competencies.reduce((a,b)=>a+Number(b.score),0)/competencies.length);
+      
+      const finalLevel = (skillLevel && skillLevel !== "Not Assessed") 
+        ? skillLevel 
+        : (finalScore >= 85 ? "Advanced" : (finalScore >= 70 ? "Intermediate" : "Beginner"));
 
       if (overallScoreEl) overallScoreEl.textContent = `${finalScore}%`;
-      if (completedCountEl) completedCountEl.textContent = completedCount > 0 ? completedCount : 1;
-      if (skillsCountEl) skillsCountEl.textContent = competencies.length > 0 ? competencies.length : 5;
-      if (skillLevelEl) skillLevelEl.textContent = finalLevel;
+      if (completedCountEl) completedCountEl.textContent = completedCount;
+      if (skillsCountEl) skillsCountEl.textContent = competencies.length;
+      if (skillLevelEl) skillLevelEl.textContent = `${finalLevel} Level`;
       if (headerRoleEl) headerRoleEl.textContent = `${finalLevel} Level`;
 
       if (quoteEl) {
@@ -410,38 +482,34 @@ async function initCandidateDashboard() {
 
       const labels = competencies.map(c => c.skill_name);
       const scores = competencies.map(c => Number(c.score));
-      renderRadarChart("competencyRadarChart", scores.length ? scores : [84, 76, 80, 78, 82], labels.length ? labels : ['Python', 'SQL', 'Algorithms', 'Data Analysis', 'Debugging']);
+      renderRadarChart("competencyRadarChart", scores.length ? scores : [70, 70, 70, 70, 70], labels.length ? labels : ['Python', 'SQL', 'Algorithms', 'Data Analysis', 'Debugging']);
       renderTrendChart("competencyTrendChart", finalScore);
-      renderSkillsBreakdownWidget(competencies.length ? competencies : [
-        { skill_name: "Python", score: 84 },
-        { skill_name: "Algorithms", score: 80 },
-        { skill_name: "Debugging", score: 82 },
-        { skill_name: "Data Analysis", score: 78 },
-        { skill_name: "SQL", score: 76 }
-      ]);
+      renderSkillsBreakdownWidget(competencies);
 
     } else {
-      // Baseline candidate display fallback
-      if (overallScoreEl) overallScoreEl.textContent = "84%";
-      if (completedCountEl) completedCountEl.textContent = "1";
-      if (skillsCountEl) skillsCountEl.textContent = "5";
-      if (skillLevelEl) skillLevelEl.textContent = "Intermediate";
-      if (headerRoleEl) headerRoleEl.textContent = "Intermediate Candidate";
-      if (quoteEl) quoteEl.textContent = `"Candidate demonstrated verified proficiency in core execution logic and practical problem solving."`;
+      // Unassessed new candidate state
+      if (overallScoreEl) overallScoreEl.textContent = "0%";
+      if (completedCountEl) completedCountEl.textContent = "0";
+      if (skillsCountEl) skillsCountEl.textContent = "0";
+      if (skillLevelEl) skillLevelEl.textContent = "Not Assessed";
+      if (headerRoleEl) headerRoleEl.textContent = "Not Assessed";
 
-      renderRadarChart("competencyRadarChart", [84, 76, 80, 78, 82], ['Python', 'SQL', 'Algorithms', 'Data Analysis', 'Debugging']);
-      renderTrendChart("competencyTrendChart", 84);
-      renderSkillsBreakdownWidget([
-        { skill_name: "Python", score: 84 },
-        { skill_name: "Algorithms", score: 80 },
-        { skill_name: "Debugging", score: 82 },
-        { skill_name: "Data Analysis", score: 78 },
-        { skill_name: "SQL", score: 76 }
-      ]);
+      if (quoteEl) {
+        quoteEl.textContent = "Complete an assessment to unlock your personalized AI competency evaluation.";
+      }
+
+      renderRadarChart("competencyRadarChart", [0, 0, 0, 0, 0], ['Python', 'SQL', 'Algorithms', 'Data Analysis', 'Debugging']);
+      renderTrendChart("competencyTrendChart", 0);
+      renderSkillsBreakdownWidget([]);
     }
 
   } catch (err) {
     console.error("Failed to load candidate dashboard data:", err);
+    updateUserProfileHeader(user);
+    if (document.getElementById("dashOverallScore")) document.getElementById("dashOverallScore").textContent = "0%";
+    if (document.getElementById("dashCompletedCount")) document.getElementById("dashCompletedCount").textContent = "0";
+    if (document.getElementById("dashSkillsCount")) document.getElementById("dashSkillsCount").textContent = "0";
+    if (document.getElementById("dashSkillLevel")) document.getElementById("dashSkillLevel").textContent = "Not Assessed";
     renderRadarChart("competencyRadarChart", [0, 0, 0, 0, 0], ['Python', 'SQL', 'Algorithms', 'Data Analysis', 'Debugging']);
     renderSkillsBreakdownWidget([]);
   }
@@ -1492,6 +1560,23 @@ MCQ_DATABASE.python = MCQ_DATABASE.python_level1;
 let currentMcqCategory = "python_level1";
 let currentQuestionIndex = 0;
 let mcqUserAnswers = {}; // { 0: optionIndex, 1: optionIndex }
+let _assessmentSimulationInitialized = false;
+
+window.selectMcqOption = function(idx) {
+  const parsed = parseInt(idx, 10);
+  if (!isNaN(parsed)) {
+    mcqUserAnswers[currentQuestionIndex] = parsed;
+    renderMcqQuestion();
+  }
+};
+
+window.jumpToMcqQuestion = function(index) {
+  const categoryData = MCQ_DATABASE[currentMcqCategory] || MCQ_DATABASE.python_level1;
+  if (index >= 0 && index < categoryData.questions.length) {
+    currentQuestionIndex = index;
+    renderMcqQuestion();
+  }
+};
 
 function initPracticalAssessmentSimulation() {
   // Determine category from URL parameter ?skill=... or ?category=...
@@ -1517,6 +1602,12 @@ function initPracticalAssessmentSimulation() {
   }
 
   const categoryData = MCQ_DATABASE[currentMcqCategory] || MCQ_DATABASE.python_level1;
+
+  if (_assessmentSimulationInitialized) {
+    renderMcqQuestion();
+    return;
+  }
+  _assessmentSimulationInitialized = true;
   currentQuestionIndex = 0;
   mcqUserAnswers = {};
 
@@ -1628,17 +1719,18 @@ function renderMcqQuestion() {
       const letter = letters[idx] || (idx + 1);
 
       return `
-        <div class="mcq-option-card ${isSelected ? 'selected' : ''}" data-index="${idx}" style="
+        <div class="mcq-option-card ${isSelected ? 'selected' : ''}" data-index="${idx}" onclick="window.selectMcqOption(${idx})" style="
           display: flex;
           align-items: flex-start;
           gap: 1rem;
           padding: 1.1rem 1.25rem;
-          background: ${isSelected ? 'rgba(6, 182, 212, 0.12)' : 'rgba(255, 255, 255, 0.03)'};
-          border: 1px solid ${isSelected ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.09)'};
+          background: ${isSelected ? 'rgba(6, 182, 212, 0.14)' : 'rgba(255, 255, 255, 0.03)'};
+          border: 1px solid ${isSelected ? 'var(--accent-cyan)' : 'rgba(255, 255, 255, 0.12)'};
           border-radius: var(--radius-md);
           cursor: pointer;
+          user-select: none;
           transition: all 0.2s ease;
-          box-shadow: ${isSelected ? '0 0 16px rgba(6, 182, 212, 0.2)' : 'none'};
+          box-shadow: ${isSelected ? '0 0 16px rgba(6, 182, 212, 0.25)' : 'none'};
         ">
           <div style="
             width: 32px;
@@ -1652,35 +1744,43 @@ function renderMcqQuestion() {
             font-weight: 800;
             font-size: 0.9rem;
             flex-shrink: 0;
+            pointer-events: none;
           ">
             ${letter}
           </div>
-          <div style="flex: 1; font-size: 0.92rem; color: ${isSelected ? 'var(--text-main)' : 'var(--text-muted)'}; line-height: 1.5; margin-top: 0.15rem; font-weight: ${isSelected ? '600' : '400'};">
+          <div style="flex: 1; font-size: 0.92rem; color: ${isSelected ? 'var(--text-main)' : 'var(--text-muted)'}; line-height: 1.5; margin-top: 0.15rem; font-weight: ${isSelected ? '600' : '400'}; pointer-events: none;">
             ${optText}
           </div>
-          <div style="font-size: 1.1rem; color: ${isSelected ? 'var(--accent-cyan)' : 'var(--text-dim)'}; flex-shrink: 0; margin-top: 0.15rem;">
+          <div style="font-size: 1.1rem; color: ${isSelected ? 'var(--accent-cyan)' : 'var(--text-dim)'}; flex-shrink: 0; margin-top: 0.15rem; pointer-events: none;">
             <i class="fa-${isSelected ? 'solid fa-circle-check' : 'regular fa-circle'}"></i>
           </div>
         </div>
       `;
     }).join('');
 
-    // Container-level event delegation for instant, robust click selection
+    // Container-level event delegation for instant click selection
     container.onclick = (e) => {
-      const card = e.target.closest(".mcq-option-card, .mcq-option-label, label, [data-index]");
+      const card = e.target.closest(".mcq-option-card, [data-index]");
       if (card) {
-        let choiceIdx = card.getAttribute("data-index");
-        if (choiceIdx === null || choiceIdx === undefined) {
-          const radioInput = card.querySelector("input[type=radio]");
-          if (radioInput) choiceIdx = radioInput.value;
-        }
+        const choiceIdx = card.getAttribute("data-index");
         const parsed = parseInt(choiceIdx, 10);
         if (!isNaN(parsed)) {
-          mcqUserAnswers[currentQuestionIndex] = parsed;
-          renderMcqQuestion();
+          window.selectMcqOption(parsed);
         }
       }
     };
+
+    // Attach click listener to each card explicitly for 100% click coverage
+    container.querySelectorAll(".mcq-option-card").forEach((card) => {
+      card.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const choiceIdx = card.getAttribute("data-index");
+        const parsed = parseInt(choiceIdx, 10);
+        if (!isNaN(parsed)) {
+          window.selectMcqOption(parsed);
+        }
+      });
+    });
   }
 
   // Update Footer Navigation Controls
@@ -1804,12 +1904,25 @@ async function triggerMcqSubmission() {
     }
   });
 
+  // Store local copy of completed assessment results and competencies
+  try {
+    localStorage.setItem("skillsync_completed_assessment", "true");
+    const localResults = JSON.parse(localStorage.getItem("skillsync_local_results") || "[]");
+    localResults.unshift({
+      id: "result-" + Date.now(),
+      overall_score: overallScore,
+      breakdown: breakdown,
+      created_at: new Date().toISOString()
+    });
+    localStorage.setItem("skillsync_local_results", JSON.stringify(localResults));
+  } catch(e) {}
+
   try {
     if (statusMsg) statusMsg.textContent = "Submitting score & generating AI skill profile...";
 
     let assessmentId = "python-practical";
     try {
-      const assRes = await fetch(`${getApiBaseUrl()}/api/assessments`);
+      const assRes = await apiFetch(`${getApiBaseUrl()}/api/assessments`);
       if (assRes.ok) {
         const assJson = await assRes.json();
         if (assJson.data && assJson.data.length > 0) {
@@ -1820,10 +1933,9 @@ async function triggerMcqSubmission() {
       }
     } catch (e) {}
 
-    const res = await fetch(`${getApiBaseUrl()}/api/assessment-attempts/current/submit`, {
+    const res = await apiFetch(`${getApiBaseUrl()}/api/assessment-attempts/current/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify({
         assessment_id: assessmentId,
         answers: mcqUserAnswers,
@@ -1884,7 +1996,7 @@ async function initResultPage() {
   try {
     let resultData = null;
     if (resultId) {
-      const res = await fetch(`${getApiBaseUrl()}/api/results/${resultId}`, { credentials: "include" });
+      const res = await apiFetch(`${getApiBaseUrl()}/api/results/${resultId}`);
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -1894,7 +2006,7 @@ async function initResultPage() {
     }
 
     if (!resultData && user.id) {
-      const latestRes = await fetch(`${getApiBaseUrl()}/api/candidates/${user.id}/results`, { credentials: "include" });
+      const latestRes = await apiFetch(`${getApiBaseUrl()}/api/candidates/${user.id}/results`);
       if (latestRes.ok) {
         const json = await latestRes.json();
         if (json.success && Array.isArray(json.data) && json.data.length > 0) {
@@ -2021,7 +2133,24 @@ function renderResultData(result) {
 
 // 5. SKILL GAP ANALYSIS (skill-gap.html)
 async function initSkillGapPage() {
-  const user = window.SkillSyncAuth || {};
+  let user = window.SkillSyncAuth;
+  if (!user || !user.id) {
+    try {
+      const stored = localStorage.getItem("skillsync_user");
+      if (stored) user = JSON.parse(stored);
+    } catch(e) {}
+  }
+  if (!user || !user.id) {
+    try {
+      const meRes = await apiFetch(`${getApiBaseUrl()}/api/auth/me`);
+      if (meRes.ok) {
+        const meJson = await meRes.json();
+        user = meJson.data || {};
+        window.SkillSyncAuth = user;
+      }
+    } catch(e) {}
+  }
+  user = user || {};
   const selectEl = document.getElementById("targetRoleSelect");
   
   let savedRole = localStorage.getItem("skillsync_target_role") || "Python Developer";
@@ -2049,11 +2178,72 @@ async function fetchAndRenderSkillGap(candidateId, targetRole) {
   compListEl.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Calculating live skill gap vector...</div>`;
 
   try {
-    const res = await fetch(`${getApiBaseUrl()}/api/skill-gap/${candidateId}?role=${encodeURIComponent(targetRole)}`, { credentials: "include" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
+    if (!candidateId) {
+      const meRes = await apiFetch(`${getApiBaseUrl()}/api/auth/me`);
+      if (meRes.ok) {
+        const meJson = await meRes.json();
+        candidateId = meJson.data?.id;
+      }
+    }
+    if (!candidateId) throw new Error("Unauthenticated user ID");
 
-    if (!json.success || !json.data || !json.data.has_data || !json.data.skill_gaps || json.data.skill_gaps.length === 0) {
+    const res = await apiFetch(`${getApiBaseUrl()}/api/skill-gap/${candidateId}?role=${encodeURIComponent(targetRole)}`);
+    let json = { success: false };
+    if (res.ok) {
+      json = await res.json();
+    }
+
+    let data = null;
+    if (json.success && json.data && json.data.has_data && json.data.skill_gaps && json.data.skill_gaps.length > 0) {
+      data = json.data;
+    } else {
+      // Fallback check: Did user complete an assessment locally or have local results?
+      let localBreakdown = null;
+      try {
+        const localResults = JSON.parse(localStorage.getItem("skillsync_local_results") || "[]");
+        if (localResults.length > 0 && localResults[0].breakdown) {
+          localBreakdown = localResults[0].breakdown;
+        }
+      } catch(e) {}
+
+      if (localBreakdown || localStorage.getItem("skillsync_completed_assessment") === "true") {
+        const activeBreakdown = localBreakdown || { "Python": 84, "SQL": 78, "Algorithms": 80, "Data Analysis": 78, "Debugging": 82, "Communication": 76 };
+        const roleTargets = {
+          'Python Developer': { 'Python': 90, 'Debugging': 85, 'Algorithms': 80, 'Data Analysis': 75, 'Communication': 75 },
+          'Java Developer': { 'Algorithms': 85, 'Debugging': 85, 'Python': 70, 'Communication': 75, 'Data Analysis': 65 },
+          'Data Scientist': { 'Data Analysis': 90, 'SQL': 85, 'Python': 85, 'Algorithms': 75, 'Communication': 70 },
+          'Frontend Engineer': { 'Communication': 85, 'Debugging': 80, 'Algorithms': 75, 'Python': 65, 'Data Analysis': 60 },
+          'Backend Engineer': { 'Python': 90, 'Algorithms': 85, 'Debugging': 85, 'SQL': 80, 'Communication': 75 }
+        }[targetRole] || { 'Python': 90, 'Debugging': 85, 'Algorithms': 80, 'Data Analysis': 75, 'Communication': 75 };
+
+        const allSkills = Array.from(new Set([...Object.keys(roleTargets), ...Object.keys(activeBreakdown)]));
+        const gaps = allSkills.map(skillName => {
+          const cur = activeBreakdown[skillName] !== undefined ? Number(activeBreakdown[skillName]) : 75;
+          const tgt = roleTargets[skillName] !== undefined ? roleTargets[skillName] : 80;
+          const delta = tgt - cur;
+          return {
+            competency_name: skillName,
+            current_score: cur,
+            target_score: tgt,
+            gap: Math.max(0, delta),
+            delta_raw: delta
+          };
+        }).sort((a, b) => b.gap - a.gap);
+
+        let totalTarget = 0, totalAchieved = 0;
+        gaps.forEach(g => { totalTarget += g.target_score; totalAchieved += Math.min(g.current_score, g.target_score); });
+        const match = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 82;
+
+        data = {
+          has_data: true,
+          match_percent: match,
+          skill_gaps: gaps,
+          largest_gap: gaps[0]
+        };
+      }
+    }
+
+    if (!data || !data.has_data || !data.skill_gaps || data.skill_gaps.length === 0) {
       if (matchBadge) matchBadge.textContent = "Target: Not Assessed";
 
       compListEl.innerHTML = `
@@ -2089,7 +2279,7 @@ async function fetchAndRenderSkillGap(candidateId, targetRole) {
       return;
     }
 
-    const data = json.data;
+    data = json.data || data;
     const gaps = data.skill_gaps;
     const match = data.match_percent;
     const topGapItem = data.largest_gap || gaps[0];
@@ -2260,19 +2450,60 @@ async function fetchAndRenderSkillGap(candidateId, targetRole) {
 
 // 6. CAREER RECOMMENDATIONS (career-recommendation.html)
 async function initCareerRecommendationPage() {
-  const user = window.SkillSyncAuth || {};
+  console.log("[Career Page] Initializing career recommendation page...");
   const summaryTitle = document.getElementById("careerSummaryTitle");
   const summaryText = document.getElementById("careerSummaryText");
   const summaryScore = document.getElementById("careerSummaryScore");
   const recommendationsEl = document.getElementById("careerRecommendationsGrid");
   const noteEl = document.getElementById("careerRecommendationNote");
-  if (!recommendationsEl || !user.id) return;
+  if (!recommendationsEl) return;
 
-  recommendationsEl.innerHTML = `<div class="card" style="grid-column: 1 / -1; padding: 2rem; text-align: center; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Calculating role matches from your verified competencies...</div>`;
+  if (summaryTitle) summaryTitle.textContent = "Analyzing role matches from verified competencies...";
+  if (summaryText) summaryText.textContent = "Calculating evidence-based role recommendations.";
+  if (noteEl) noteEl.textContent = "Fetching your competency profile recommendations...";
+  recommendationsEl.innerHTML = `<div class="card" style="grid-column: 1 / -1; padding: 2.5rem; text-align: center; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-cyan);"></i><p style="margin-top: 1rem;">Loading evidence-based recommendations...</p></div>`;
 
+  let user = window.SkillSyncAuth;
+  if (!user || !user.id) {
+    try {
+      const stored = localStorage.getItem("skillsync_user");
+      if (stored) user = JSON.parse(stored);
+    } catch(e) {}
+  }
+  if (!user || !user.id) {
+    try {
+      console.log("[Career Page] Resolving user session via /api/auth/me...");
+      const meRes = await apiFetch(`${getApiBaseUrl()}/api/auth/me`);
+      if (meRes.ok) {
+        const meJson = await meRes.json();
+        user = meJson.data || {};
+        window.SkillSyncAuth = user;
+      }
+    } catch(e) {
+      console.warn("[Career Page] Failed to fetch auth session:", e);
+    }
+  }
+  user = user || {};
+
+  if (!user.id) {
+    console.warn("[Career Page] User ID missing, prompt sign-in.");
+    if (summaryTitle) summaryTitle.textContent = "Please sign in to view recommendations";
+    if (summaryText) summaryText.textContent = "Career recommendations require a verified user session.";
+    if (summaryScore) summaryScore.textContent = "—";
+    if (noteEl) noteEl.textContent = "Authentication required.";
+    recommendationsEl.innerHTML = `<div class="card" style="grid-column: 1 / -1; padding: 2.5rem; text-align: center;"><i class="fa-solid fa-lock" style="font-size: 2rem; color: var(--accent-cyan);"></i><h3 style="margin-top: 1rem;">Authentication required</h3><p style="color: var(--text-muted); margin: 0.5rem 0 1.25rem;">Please sign in to access your competency-based career recommendations.</p><a href="auth.html" class="btn btn-primary">Sign In</a></div>`;
+    return;
+  }
+
+  console.log(`[Career Page] Fetching recommendations for user ID: ${user.id}`);
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/career-recommendations/${user.id}`, { credentials: "include" });
+    const url = `${getApiBaseUrl()}/api/career-recommendations/${user.id}`;
+    console.log(`[Career Page] Sending GET ${url}`);
+    const response = await apiFetch(url);
+    console.log(`[Career Page] API status code: ${response.status}`);
     const result = await response.json();
+    console.log("[Career Page] API response payload:", result);
+
     if (!response.ok || !result.success) throw new Error(result.message || `HTTP ${response.status}`);
 
     const recommendations = result.data?.recommendations || [];
@@ -2304,12 +2535,12 @@ async function initCareerRecommendationPage() {
       return `<article class="card card-hover-glow career-card"><div class="career-card-heading"><div class="stat-icon"><i class="${icon}"></i></div><span class="badge ${index === 0 ? "badge-green" : "badge-primary"}">${recommendation.match_percent}% Match</span></div><h2>${escapeCareerText(recommendation.role_title)}</h2><p>Match based on your current verified competency evidence against this role's target profile.</p><h4>Strongest matching competencies</h4><div class="career-tags">${matchingTags}</div><h4>Missing competencies</h4><p class="career-gap">${missingText}</p><a href="skill-gap.html" class="btn btn-secondary btn-sm">View Skill Gap <i class="fa-solid fa-arrow-right"></i></a></article>`;
     }).join("");
   } catch (error) {
-    console.error("Failed to load career recommendations:", error);
+    console.error("[Career Page] Failed to load career recommendations:", error);
     if (summaryTitle) summaryTitle.textContent = "Career recommendations are unavailable";
     if (summaryText) summaryText.textContent = "We could not load your current competency-based recommendations.";
     if (summaryScore) summaryScore.textContent = "—";
     if (noteEl) noteEl.textContent = "Try again after confirming the API is running.";
-    recommendationsEl.innerHTML = `<div class="card" style="grid-column: 1 / -1; padding: 2rem; text-align: center;"><i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; color: #f43f5e;"></i><h3 style="margin-top: 1rem;">Unable to load recommendations</h3><p style="color: var(--text-muted); margin-top: 0.5rem;">${escapeCareerText(error.message)}</p></div>`;
+    recommendationsEl.innerHTML = `<div class="card" style="grid-column: 1 / -1; padding: 2rem; text-align: center;"><i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; color: #f43f5e;"></i><h3 style="margin-top: 1rem;">Unable to load recommendations</h3><p style="color: var(--text-muted); margin: 0.5rem 0 1.25rem;">${escapeCareerText(error.message)}</p><button class="btn btn-secondary" onclick="initCareerRecommendationPage()">Retry</button></div>`;
   }
 }
 
@@ -2320,7 +2551,7 @@ function escapeCareerText(value) {
 }
 
 // 7. PASSPORT PAGE (passport.html)
-function initPassportPage() {
+async function initPassportPage() {
   const shareBtn = document.getElementById("sharePassportBtn");
   if (shareBtn) {
     shareBtn.addEventListener("click", () => {
@@ -2337,6 +2568,46 @@ function initPassportPage() {
         showToast("Competency Passport downloaded successfully!", "success");
       }, 1500);
     });
+  }
+
+  let user = window.SkillSyncAuth;
+  if (!user || !user.id) {
+    try {
+      const stored = localStorage.getItem("skillsync_user");
+      if (stored) user = JSON.parse(stored);
+    } catch(e) {}
+  }
+  user = user || {};
+
+  const name = user.name || user.full_name || (user.email ? user.email.split('@')[0] : 'Candidate');
+  const initials = name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'CA';
+  const idShort = user.id ? user.id.slice(0, 8).toUpperCase() : 'PENDING';
+
+  const nameEl = document.getElementById("passportHeroName");
+  if (nameEl) nameEl.textContent = name;
+
+  const avatarEl = document.getElementById("passportHeroAvatar");
+  if (avatarEl) avatarEl.textContent = initials;
+
+  const idEl = document.getElementById("passportHeroId");
+  if (idEl) idEl.textContent = `#CPX-${idShort}`;
+
+  if (user.id) {
+    try {
+      const res = await apiFetch(`${getApiBaseUrl()}/api/candidates/${user.id}/competencies`);
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.data || {};
+        const score = data.overall_competency !== undefined && data.overall_competency !== null ? Math.round(Number(data.overall_competency)) : null;
+        const level = data.competency_level || (score ? (score >= 85 ? 'Advanced Level' : (score >= 70 ? 'Intermediate Level' : 'Beginner Level')) : 'Candidate');
+
+        const scoreEl = document.getElementById("passportHeroScore");
+        if (scoreEl) scoreEl.textContent = score !== null ? `${score}%` : '—';
+
+        const levelEl = document.getElementById("passportHeroLevel");
+        if (levelEl) levelEl.textContent = level;
+      }
+    } catch(e) {}
   }
 }
 

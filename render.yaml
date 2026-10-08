@@ -1,13 +1,14 @@
 services:
-  # Backend Node.js Express API Service
   - type: web
     name: skillsync-api
     env: node
     rootDir: api
     buildCommand: npm install
-    startCommand: node server.js
+    startCommand: npm start
     envVars:
       - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
@@ -15,9 +16,3 @@ services:
         sync: false
       - key: ENCRYPTION_SECRET
         sync: false
-
-  # Frontend Static Site
-  - type: static
-    name: skillsync-frontend
-    buildCommand: ""
-    publishPath: ./

@@ -7,6 +7,8 @@
   <!-- Google Fonts & Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css">
+  <script src="config.js?v=20260920-1"></script>
+  <script src="route-guard.js?v=20260927-1"></script>
 </head>
 <body>
   <div class="app-container">
@@ -33,10 +35,10 @@
 
         <div class="nav-actions">
           <div class="user-profile">
-            <div class="avatar">MS</div>
+            <div class="avatar" id="dashAvatar">--</div>
             <div class="user-info">
-              <span class="user-name">Muskaan 👋</span>
-              <span class="user-role">Candidate View</span>
+              <span class="user-name" id="dashHeaderName">Candidate</span>
+              <span class="user-role" id="dashHeaderRole">Candidate</span>
             </div>
           </div>
         </div>

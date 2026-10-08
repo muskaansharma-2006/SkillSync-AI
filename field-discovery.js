@@ -156,7 +156,7 @@ function renderDiscoveryQuestion() {
   nextQuestion.innerHTML = discoveryState.currentQuestion === discoveryQuestions.length - 1 ? "See My Suggestions <i class=\"fa-solid fa-compass\"></i>" : "Next <i class=\"fa-solid fa-arrow-right\"></i>";
 }
 
-const getApiBaseUrl = () => (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : (window.API_BASE_URL || '')).replace(/\/$/, '');
+// getApiBaseUrl is provided globally by config.js
 
 async function fetchActiveCategories() {
   try {

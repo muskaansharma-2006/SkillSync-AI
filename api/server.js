@@ -50,6 +50,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(projectRoot, {
+  dotfiles: 'deny',
   setHeaders: (res, path) => {
     if (path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');

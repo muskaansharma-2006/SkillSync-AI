@@ -1,5 +1,51 @@
 const AUTH_API = `${typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : (window.API_BASE_URL || 'http://127.0.0.1:3000')}/api/auth`;
 
+function getSanitizedToken() {
+  const t = localStorage.getItem("skillsync_token");
+  if (!t || t === "null" || t === "undefined" || t.trim() === "") return null;
+  return t;
+}
+
+// Check if user is already logged in when visiting auth page with a return destination
+(() => {
+  const token = getSanitizedToken();
+  if (!token) {
+    localStorage.removeItem("skillsync_token");
+    localStorage.removeItem("skillsync_user");
+    return;
+  }
+  const urlParams = new URLSearchParams(window.location.search);
+  const returnTo = urlParams.get("returnTo");
+  if (!returnTo) {
+    // Stay on auth.html unless the user was explicitly redirected with returnTo
+    return;
+  }
+
+  const baseUrl = typeof getApiBaseUrl === 'function' ? getApiBaseUrl() : (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : (window.API_BASE_URL || ''));
+  fetch(`${baseUrl.replace(/\/$/, '')}/api/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    credentials: "include"
+  }).then(async res => {
+    if (res.ok) {
+      const result = await res.json().catch(() => ({}));
+      if (result.data && result.data.id) {
+        window.SkillSyncAuth = result.data;
+        localStorage.setItem("skillsync_user", JSON.stringify(result.data));
+        window.location.replace(returnTo);
+      } else {
+        localStorage.removeItem("skillsync_token");
+        localStorage.removeItem("skillsync_user");
+      }
+    } else {
+      localStorage.removeItem("skillsync_token");
+      localStorage.removeItem("skillsync_user");
+    }
+  }).catch(() => {
+    localStorage.removeItem("skillsync_token");
+    localStorage.removeItem("skillsync_user");
+  });
+})();
+
 const loginPanel = document.getElementById("loginPanel");
 const signupPanel = document.getElementById("signupPanel");
 const loginTab = document.getElementById("loginTab");
@@ -41,14 +87,16 @@ function saveSession(data) {
     window.SkillSyncAuth = data.user;
     localStorage.setItem("skillsync_user", JSON.stringify(data.user));
   }
-  const destination = data.user?.role === "recruiter" ? "recruiter.html" : "index.html";
+  const urlParams = new URLSearchParams(window.location.search);
+  const returnTo = urlParams.get("returnTo");
+  const destination = returnTo || (data.user?.role === "recruiter" ? "recruiter.html" : "index.html");
   window.location.href = destination;
 }
 
 async function sendAuth(path, payload) {
   const baseUrl = typeof getApiBaseUrl === 'function' ? getApiBaseUrl() : (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : (window.API_BASE_URL || ''));
   const url = `${baseUrl.replace(/\/$/, '')}/api/auth/${path}`;
-  const token = localStorage.getItem("skillsync_token");
+  const token = getSanitizedToken();
   const headers = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 

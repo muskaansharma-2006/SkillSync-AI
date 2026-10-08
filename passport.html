@@ -7,6 +7,7 @@
   <!-- Google Fonts & Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="style.css">
+  <script src="route-guard.js?v=20260927-1"></script>
 </head>
 <body>
   <div class="app-container">
@@ -34,10 +35,10 @@
 
         <div class="nav-actions">
           <div class="user-profile">
-            <div class="avatar">MS</div>
+            <div class="avatar" id="dashAvatar">--</div>
             <div class="user-info">
-              <span class="user-name">Muskaan 👋</span>
-              <span class="user-role">Candidate View</span>
+              <span class="user-name" id="dashHeaderName">Candidate</span>
+              <span class="user-role" id="dashHeaderRole">Candidate</span>
             </div>
           </div>
         </div>
@@ -72,17 +73,17 @@
           
           <!-- Profile & Passport ID -->
           <div style="display: flex; gap: 1.25rem; align-items: center;">
-            <div class="avatar" style="width: 72px; height: 72px; font-size: 1.6rem; border-color: var(--primary);">MS</div>
+            <div class="avatar" id="passportHeroAvatar" style="width: 72px; height: 72px; font-size: 1.6rem; border-color: var(--primary);">--</div>
             <div>
               <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff;">Muskaan Sharma</h2>
+                <h2 id="passportHeroName" style="font-size: 1.6rem; font-weight: 800; color: #fff;">Candidate</h2>
                 <i class="fa-solid fa-circle-check" style="color: var(--accent-cyan); font-size: 1.1rem;" title="Verified Candidate"></i>
               </div>
               <p style="font-size: 0.88rem; color: var(--text-muted); margin-top: 0.15rem;">
-                Software Engineer & Data Analyst • Verified ID: <span style="font-family: var(--font-code); color: var(--accent-cyan);">#CPX-9482-MS</span>
+                Software Engineer & Data Analyst • Verified ID: <span id="passportHeroId" style="font-family: var(--font-code); color: var(--accent-cyan);">#CPX-PENDING</span>
               </p>
               <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                <span class="badge badge-primary">Intermediate Level</span>
+                <span id="passportHeroLevel" class="badge badge-primary">Candidate</span>
                 <span class="badge badge-cyan">Cryptographic SHA-256 Verified</span>
               </div>
             </div>
@@ -92,7 +93,7 @@
           <div style="display: flex; align-items: center; gap: 1.5rem;">
             <div style="text-align: right;">
               <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Verified Competency</div>
-              <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent-cyan); line-height: 1;">84%</div>
+              <div id="passportHeroScore" style="font-size: 2.5rem; font-weight: 800; color: var(--accent-cyan); line-height: 1;">—</div>
             </div>
 
             <!-- QR Code Mock -->
@@ -219,8 +220,8 @@
 
   </div>
 
-  <script src="config.js?v=20260920-1"></script>
-  <script src="script.js?v=20260914-3"></script>
-  <script src="intro.js?v=20260914-1"></script>
+  <script src="config.js?v=20260928-999"></script>
+  <script src="script.js?v=20260928-999"></script>
+  <script src="intro.js?v=20260928-999"></script>
 </body>
 </html>

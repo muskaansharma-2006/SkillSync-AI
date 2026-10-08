@@ -10,8 +10,7 @@ function getApiBaseUrl() {
   return '';
 }
 
-const API_BASE_URL = getApiBaseUrl();
 if (typeof window !== 'undefined') {
-  window.API_BASE_URL = API_BASE_URL;
+  window.API_BASE_URL = window.API_BASE_URL || getApiBaseUrl();
   window.getApiBaseUrl = getApiBaseUrl;
 }
